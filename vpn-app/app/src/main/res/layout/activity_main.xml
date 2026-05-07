@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Zivpn Custom Configuration"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="16dp"/>
+
+        <EditText
+            android:id="@+id/etServer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Server Host (e.g. ssh-2.chice.me)"
+            android:inputType="textUri" />
+
+        <EditText
+            android:id="@+id/etAuth"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Auth (User:Pass)"
+            android:inputType="text" />
+
+        <EditText
+            android:id="@+id/etObfs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="OBFS Key"
+            android:inputType="text" />
+
+        <TextView
+            android:id="@+id/tvCores"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Cores: 4"
+            android:layout_marginTop="8dp"/>
+
+        <SeekBar
+            android:id="@+id/sbCores"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="10"
+            android:progress="4" />
+
+        <EditText
+            android:id="@+id/etUpLimit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Up Limit (e.g. 1 Mbps, 0 to disable)"
+            android:text="1 Mbps" />
+
+        <EditText
+            android:id="@+id/etDownLimit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Down Limit (e.g. 1 Mbps, 0 to disable)"
+            android:text="1 Mbps" />
+
+        <EditText
+            android:id="@+id/etDns"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="DNS (comma separated, e.g. 8.8.8.8,1.1.1.1)"
+            android:text="8.8.8.8,1.1.1.1" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="16dp">
+
+            <Button
+                android:id="@+id/btnStart"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Start VPN" />
+
+            <Button
+                android:id="@+id/btnStop"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Stop VPN" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp">
+
+            <Button
+                android:id="@+id/btnImport"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Import" />
+
+            <Button
+                android:id="@+id/btnExport"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Export" />
+        </LinearLayout>
+
+        <EditText
+            android:id="@+id/etImportExport"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Paste zivpn:// here for import"
+            android:minLines="3"
+            android:gravity="top"
+            android:layout_marginTop="8dp"/>
+
+    </LinearLayout>
+</ScrollView>
