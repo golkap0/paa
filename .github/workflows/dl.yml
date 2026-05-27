@@ -1,4 +1,4 @@
-name: Download YouTube APK
+name: Download & Strip YouTube APK
 
 on:
   workflow_dispatch:
@@ -25,17 +25,31 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download Latest apkmd Binary
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Download apktool
         run: |
-          echo "⬇️ Downloading latest apkmd via wget..."
+          echo "⬇️ Fetching latest apktool JAR URL..."
+          APKTOOL_URL=$(curl -sL https://api.github.com/repos/iBotPeaches/Apktool/releases/latest | \
+            python3 -c "import sys,json; d=json.load(sys.stdin); print([a['browser_download_url'] for a in d['assets'] if a['name'].endswith('.jar')][0])")
+          
+          echo "⬇️ Downloading apktool..."
+          wget -q --show-progress -O apktool.jar "$APKTOOL_URL"
+          echo "✅ apktool ready: $(ls -lh apktool.jar | awk '{print $5}')"
+
+      - name: Download apkmd Binary
+        run: |
+          echo "⬇️ Downloading latest apkmd..."
           wget -q --show-progress -O apkmd \
             "https://github.com/tanishqmanuja/apkmirror-downloader/releases/latest/download/apkmd"
-          
           chmod +x apkmd
-          echo "✅ apkmd ready! Size: $(ls -lh apkmd | awk '{print $5}')"
-          ./apkmd --version || true
+          echo "✅ apkmd ready!"
 
-      - name: Create apps.json Config
+      - name: Download YouTube APK from APKMirror
         run: |
           cat > apps.json <<'EOF'
           {
@@ -48,7 +62,7 @@ jobs:
                 "org": "google-inc",
                 "repo": "youtube",
                 "version": "${{ github.event.inputs.version || '20.05.46' }}",
-                "outFile": "${{ github.event.inputs.outFile || 'youtube-20.05.46.apk' }}",
+                "outFile": "youtube-original.apk",
                 "type": "apk",
                 "arch": "universal",
                 "dpi": "nodpi"
@@ -56,57 +70,84 @@ jobs:
             ]
           }
           EOF
-
-      - name: Download YouTube APK
-        run: |
-          echo "🚀 Starting download from APKMirror..."
+          
+          echo "🚀 Downloading original APK..."
           ./apkmd apps.json
           
-          FILE="${{ github.event.inputs.outFile || 'youtube-20.05.46.apk' }}"
-          if [ -f "$FILE" ]; then
-            echo "✅ Download successful: $FILE"
-            ls -lh "$FILE"
-          else
-            echo "❌ Download failed: $FILE not found"
-            exit 1
-          fi
+          echo "📦 Original size:"
+          ls -lh youtube-original.apk
 
-      - name: Verify APK File
+      - name: Decompile APK
+        run: |
+          echo "🔧 Decompiling with apktool..."
+          java -jar apktool.jar d youtube-original.apk -o youtube_decompiled -f
+
+      - name: Strip libs (keep only armeabi-v7a)
+        run: |
+          echo "🗑️ Stripping non-armv7 libraries..."
+          
+          if [ ! -d "youtube_decompiled/lib" ]; then
+            echo "⚠️ No lib folder found, skipping strip"
+            exit 0
+          fi
+          
+          echo "Before:"
+          ls -la youtube_decompiled/lib/
+          
+          # Hapus semua kecuali armeabi-v7a
+          for arch in arm64-v8a armeabi x86 x86_64 mips mips64; do
+            if [ -d "youtube_decompiled/lib/$arch" ]; then
+              echo "  Removing lib/$arch ..."
+              rm -rf "youtube_decompiled/lib/$arch"
+            fi
+          done
+          
+          echo "After:"
+          ls -la youtube_decompiled/lib/
+
+      - name: Rebuild APK (unsigned)
+        run: |
+          echo "🔨 Rebuilding stripped APK..."
+          java -jar apktool.jar b youtube_decompiled -o "${{ github.event.inputs.outFile || 'youtube-20.05.46.apk' }}"
+          
+          echo "📦 Final size:"
+          ls -lh "${{ github.event.inputs.outFile || 'youtube-20.05.46.apk' }}"
+
+      - name: Verify size under 100MB
         run: |
           FILE="${{ github.event.inputs.outFile || 'youtube-20.05.46.apk' }}"
-          if [ ! -f "$FILE" ]; then
-            echo "❌ APK file not found!"
-            exit 1
-          fi
-          
           SIZE=$(stat -c%s "$FILE")
-          if [ "$SIZE" -lt 1000000 ]; then
-            echo "❌ File too small ($SIZE bytes), likely not a valid APK"
+          LIMIT=104857600  # 100MB in bytes
+          
+          echo "Size: $SIZE bytes"
+          
+          if [ "$SIZE" -gt "$LIMIT" ]; then
+            echo "❌ Still too big ($SIZE bytes) after strip. Cannot push to GitHub."
             exit 1
           fi
           
-          echo "✅ APK verified: $(ls -lh "$FILE" | awk '{print $5}')"
+          echo "✅ Size OK: under 100MB"
 
-      - name: Cleanup
-        run: rm -f apps.json apkmd
+      - name: Cleanup build files
+        run: |
+          rm -rf youtube_decompiled youtube-original.apk apps.json apkmd apktool.jar
 
       - name: Setup Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Commit & Push APK to Root
+      - name: Commit & Push to Root
         run: |
           FILE="${{ github.event.inputs.outFile || 'youtube-20.05.46.apk' }}"
           
-          if git diff --quiet && git diff --staged --quiet; then
-            if git ls-files | grep -q "^${FILE}$"; then
-              echo "ℹ️ No changes detected, APK already up to date"
-              exit 0
-            fi
+          git add "$FILE"
+          
+          if git diff --cached --quiet; then
+            echo "ℹ️ No changes to commit"
+            exit 0
           fi
           
-          git add "$FILE"
-          git commit -m "📥 Download YouTube ${{ github.event.inputs.version || '20.05.46' }} [run ${{ github.run_id }}]"
+          git commit -m "📥 YouTube ${{ github.event.inputs.version || '20.05.46' }} armv7-stripped [run ${{ github.run_id }}]"
           git push
-          echo "✅ Successfully pushed $FILE to repository root"
+          echo "✅ Pushed $FILE to repository root"
