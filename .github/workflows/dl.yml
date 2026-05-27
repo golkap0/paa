@@ -12,8 +12,7 @@ on:
         required: true
         default: 'youtube-20.05.46.apk'
 
-  schedule:
-    - cron: '0 0 * * 0'
+  
 
 permissions:
   contents: write
