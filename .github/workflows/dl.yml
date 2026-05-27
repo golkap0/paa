@@ -1,35 +1,139 @@
-name: Scrape and Download APK
+name: Download YouTube APK
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'YouTube Version'
+        required: true
+        default: '20.05.46'
+      outFile:
+        description: 'Output filename'
+        required: true
+        default: 'youtube-20.05.46.apk'
+  
+permissions:
+  contents: write
 
 jobs:
-  scrape:
+  download:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
+    
     steps:
-      - name: Checkout repository
+      - name: ⬇️ Checkout Repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Node.js
+      - name: 🔧 Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install Dependencies
-        run: |
-          npm install playwright
-          npx playwright install --with-deps chromium
+      - name: 📦 Install apkmirror-downloader
+        run: npm install -g apkmirror-downloader
 
-      - name: Run Scraper
-        run: node download.js
-
-      - name: Commit and Push
+      - name: 📝 Create apps.json Config
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add youtube-20-05-46.apk
-          git commit -m "Add scraped APK" || echo "No changes"
+          cat > apps.json << 'EOF'
+          {
+            "options": {
+              "outDir": ".",
+              "overwrite": true
+            },
+            "apps": [
+              {
+                "org": "google-inc",
+                "repo": "youtube",
+                "version": "${{ github.event.inputs.version || '20.05.46' }}",
+                "outFile": "${{ github.event.inputs.outFile || 'youtube-20.05.46.apk' }}",
+                "type": "apk",
+                "arch": "universal",
+                "dpi": "nodpi"
+              }
+            ]
+          }
+          EOF
+
+      - name: 📥 Download YouTube APK
+        run: |
+          echo "🚀 Starting download from APKMirror..."
+          apkmd apps.json
+          
+          # Verify file exists
+          FILE="${{ github.event.inputs.outFile || 'youtube-20.05.46.apk' }}"
+          if [ -f "$FILE" ]; then
+            echo "✅ Download successful: $FILE"
+            ls -lh "$FILE"
+          else
+            echo "❌ Download failed: $FILE not found"
+            exit 1
+          fi
+
+      - name: 🔍 Verify APK File
+        run: |
+          FILE="${{ github.event.inputs.outFile || 'youtube-20.05.46.apk' }}"
+          if [ ! -f "$FILE" ]; then
+            echo "❌ APK file not found!"
+            exit 1
+          fi
+          
+          SIZE=$(stat -c%s "$FILE")
+          if [ "$SIZE" -lt 1000000 ]; then
+            echo "❌ File too small ($SIZE bytes), likely not a valid APK"
+            exit 1
+          fi
+          
+          echo "✅ APK verified: $SIZE bytes"
+
+      - name: 🧹 Cleanup Config
+        run: rm -f apps.json
+
+      - name: 🔐 Setup Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: 💾 Commit & Push APK to Root
+        run: |
+          FILE="${{ github.event.inputs.outFile || 'youtube-20.05.46.apk' }}"
+          
+          # Check if file changed
+          if git diff --quiet && git diff --staged --quiet; then
+            if git ls-files | grep -q "^${FILE}$"; then
+              echo "ℹ️ No changes detected, APK already up to date"
+              exit 0
+            fi
+          fi
+          
+          git add "$FILE"
+          git commit -m "📥 Download YouTube ${{ github.event.inputs.version || '20.05.46' }} APK
+          
+          - Source: APKMirror (google-inc/youtube)
+          - Version: ${{ github.event.inputs.version || '20.05.46' }}
+          - File: $FILE
+          - Downloaded by: apkmirror-downloader
+          - Action: ${{ github.run_id }}"
+          
           git push
+          echo "✅ Successfully pushed $FILE to repository root"
+
+      - name: 📊 Summary
+        if: always()
+        run: |
+          FILE="${{ github.event.inputs.outFile || 'youtube-20.05.46.apk' }}"
+          echo "## 📦 Download Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| App | YouTube |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | ${{ github.event.inputs.version || '20.05.46' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Source | APKMirror |" >> $GITHUB_STEP_SUMMARY
+          echo "| Output | \`$FILE\` |" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "$FILE" ]; then
+            SIZE=$(ls -lh "$FILE" | awk '{print $5}')
+            echo "| Status | ✅ Success ($SIZE) |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Status | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
