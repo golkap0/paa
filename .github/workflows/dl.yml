@@ -58,7 +58,7 @@ jobs:
       - name: 📥 Download YouTube APK
         run: |
           echo "🚀 Starting download from APKMirror..."
-          apkmd apps.json
+          npx apkmd apps.json
           
           # Verify file exists
           FILE="${{ github.event.inputs.outFile || 'youtube-20.05.46.apk' }}"
