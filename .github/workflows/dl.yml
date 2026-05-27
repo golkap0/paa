@@ -12,8 +12,6 @@ on:
         required: true
         default: 'youtube-20.05.46.apk'
 
-  
-
 permissions:
   contents: write
 
@@ -22,45 +20,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: ⬇️ Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 🔧 Download Latest apkmd Binary
+      - name: Download Latest apkmd Binary
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🔍 Fetching latest release info from GitHub API..."
-          
-          # Get latest release JSON & extract download URL for 'apkmd' asset using Python
-          DOWNLOAD_URL=$(curl -sL \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/tanishqmanuja/apkmirror-downloader/releases/latest | \
-            python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-for asset in data.get('assets', []):
-    if asset['name'] == 'apkmd':
-        print(asset['browser_download_url'])
-        break
-")
-          
-          if [ -z "$DOWNLOAD_URL" ]; then
-            echo "❌ Failed to get download URL for 'apkmd' binary"
-            exit 1
-          fi
-          
-          echo "⬇️ Downloading apkmd from: $DOWNLOAD_URL"
-          curl -sL -o apkmd "$DOWNLOAD_URL"
-          
-          echo "🔓 Setting executable permission..."
+          echo "⬇️ Downloading latest apkmd binary..."
+          gh release download --repo tanishqmanuja/apkmirror-downloader latest --pattern "apkmd"
           chmod +x apkmd
-          
           echo "✅ apkmd ready!"
           ./apkmd --version || true
 
-      - name: 📝 Create apps.json Config
+      - name: Create apps.json Config
         run: |
-          cat > apps.json << 'EOF'
+          cat > apps.json <<'EOF'
           {
             "options": {
               "outDir": ".",
@@ -80,11 +57,10 @@ for asset in data.get('assets', []):
           }
           EOF
 
-      - name: 📥 Download YouTube APK
+      - name: Download YouTube APK
         run: |
           echo "🚀 Starting download from APKMirror..."
           ./apkmd apps.json
-          
           FILE="${{ github.event.inputs.outFile || 'youtube-20.05.46.apk' }}"
           if [ -f "$FILE" ]; then
             echo "✅ Download successful: $FILE"
@@ -94,70 +70,38 @@ for asset in data.get('assets', []):
             exit 1
           fi
 
-      - name: 🔍 Verify APK File
+      - name: Verify APK File
         run: |
           FILE="${{ github.event.inputs.outFile || 'youtube-20.05.46.apk' }}"
           if [ ! -f "$FILE" ]; then
             echo "❌ APK file not found!"
             exit 1
           fi
-          
           SIZE=$(stat -c%s "$FILE")
           if [ "$SIZE" -lt 1000000 ]; then
             echo "❌ File too small ($SIZE bytes), likely not a valid APK"
             exit 1
           fi
-          
           echo "✅ APK verified: $(ls -lh "$FILE" | awk '{print $5}')"
 
-      - name: 🧹 Cleanup
-        run: |
-          rm -f apps.json apkmd
+      - name: Cleanup
+        run: rm -f apps.json apkmd
 
-      - name: 🔐 Setup Git
+      - name: Setup Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: 💾 Commit & Push APK to Root
+      - name: Commit & Push APK to Root
         run: |
           FILE="${{ github.event.inputs.outFile || 'youtube-20.05.46.apk' }}"
-          
           if git diff --quiet && git diff --staged --quiet; then
             if git ls-files | grep -q "^${FILE}$"; then
               echo "ℹ️ No changes detected, APK already up to date"
               exit 0
             fi
           fi
-          
           git add "$FILE"
-          git commit -m "📥 Download YouTube ${{ github.event.inputs.version || '20.05.46' }} APK
-
-- Source: APKMirror (google-inc/youtube)
-- Version: ${{ github.event.inputs.version || '20.05.46' }}
-- File: $FILE
-- Downloader: apkmirror-downloader (latest binary)
-- Action Run: ${{ github.run_id }}"
-          
+          git commit -m "📥 Download YouTube ${{ github.event.inputs.version || '20.05.46' }} [run ${{ github.run_id }}]"
           git push
           echo "✅ Successfully pushed $FILE to repository root"
-
-      - name: 📊 Summary
-        if: always()
-        run: |
-          FILE="${{ github.event.inputs.outFile || 'youtube-20.05.46.apk' }}"
-          echo "## 📦 Download Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| App | YouTube |" >> $GITHUB_STEP_SUMMARY
-          echo "| Version | ${{ github.event.inputs.version || '20.05.46' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Source | APKMirror |" >> $GITHUB_STEP_SUMMARY
-          echo "| Output | \`$FILE\` |" >> $GITHUB_STEP_SUMMARY
-          
-          if [ -f "$FILE" ]; then
-            SIZE=$(ls -lh "$FILE" | awk '{print $5}')
-            echo "| Status | ✅ Success ($SIZE) |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| Status | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
-          fi
