@@ -26,13 +26,13 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download Latest apkmd Binary
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "⬇️ Downloading latest apkmd binary..."
-          gh release download --repo tanishqmanuja/apkmirror-downloader latest --pattern "apkmd"
+          echo "⬇️ Downloading latest apkmd via wget..."
+          wget -q --show-progress -O apkmd \
+            "https://github.com/tanishqmanuja/apkmirror-downloader/releases/latest/download/apkmd"
+          
           chmod +x apkmd
-          echo "✅ apkmd ready!"
+          echo "✅ apkmd ready! Size: $(ls -lh apkmd | awk '{print $5}')"
           ./apkmd --version || true
 
       - name: Create apps.json Config
@@ -61,6 +61,7 @@ jobs:
         run: |
           echo "🚀 Starting download from APKMirror..."
           ./apkmd apps.json
+          
           FILE="${{ github.event.inputs.outFile || 'youtube-20.05.46.apk' }}"
           if [ -f "$FILE" ]; then
             echo "✅ Download successful: $FILE"
@@ -77,11 +78,13 @@ jobs:
             echo "❌ APK file not found!"
             exit 1
           fi
+          
           SIZE=$(stat -c%s "$FILE")
           if [ "$SIZE" -lt 1000000 ]; then
             echo "❌ File too small ($SIZE bytes), likely not a valid APK"
             exit 1
           fi
+          
           echo "✅ APK verified: $(ls -lh "$FILE" | awk '{print $5}')"
 
       - name: Cleanup
@@ -95,12 +98,14 @@ jobs:
       - name: Commit & Push APK to Root
         run: |
           FILE="${{ github.event.inputs.outFile || 'youtube-20.05.46.apk' }}"
+          
           if git diff --quiet && git diff --staged --quiet; then
             if git ls-files | grep -q "^${FILE}$"; then
               echo "ℹ️ No changes detected, APK already up to date"
               exit 0
             fi
           fi
+          
           git add "$FILE"
           git commit -m "📥 Download YouTube ${{ github.event.inputs.version || '20.05.46' }} [run ${{ github.run_id }}]"
           git push
